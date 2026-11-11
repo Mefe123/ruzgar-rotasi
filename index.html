@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1d1a2b" />
+    <meta name="description" content="Rüzgâr Rotası: tarayıcıda oynanan low-poly zamana karşı yarış. Bölümler, hayalet araç ve arkadaşlarla P2P lobi." />
+    <title>Rüzgâr Rotası</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d1a2b'/%3E%3Cpath d='M12 44 L30 18 L36 30 L52 20 L40 46 Z' fill='%23ffb300'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <canvas id="sahne"></canvas>
+
+    <!-- ANA MENÜ -->
+    <section id="menu" class="ekran">
+      <div class="menu-ic">
+        <h1 class="logo"><span>Rüzgâr</span><span>Rotası</span></h1>
+        <p class="alt">Kanyonda zamana karşı. Her milisaniye senin.</p>
+        <nav class="menu-dugmeler">
+          <button class="buyuk" data-git="bolumler">Bölümler <small>tek kişilik</small></button>
+          <button class="buyuk ikincil" data-git="lobi">Lobi <small>arkadaşlarla yarış</small></button>
+          <button class="buyuk ikincil" data-git="atolye">Pist atölyesi <small>kendi pistini yap</small></button>
+        </nav>
+        <div class="kimlik">
+          <label>Adın <input id="ad" maxlength="16" placeholder="Sürücü" autocomplete="nickname" /></label>
+          <div class="renkler" id="renkler" role="radiogroup" aria-label="Araç rengi"></div>
+        </div>
+        <div class="ayarlar">
+          <label><input type="checkbox" id="ses" /> Ses</label>
+          <label><input type="checkbox" id="hareket" /> Hareketi azalt</label>
+        </div>
+        <p class="ipucu klavye-ipucu">W A S D / oklar · Boşluk drift · R yeniden başla · Enter son kontrol noktası · Esc duraklat</p>
+      </div>
+    </section>
+
+    <!-- BÖLÜMLER -->
+    <section id="bolumler" class="ekran gizli">
+      <header class="ust"><button class="geri" data-git="menu">← Menü</button><h2>Bölümler</h2><span id="madalya-toplam"></span></header>
+      <div id="bolum-listesi" class="bolum-listesi"></div>
+    </section>
+
+    <!-- LOBİ -->
+    <section id="lobi" class="ekran gizli">
+      <header class="ust"><button class="geri" id="lobi-geri">← Menü</button><h2>Lobi</h2></header>
+      <div id="lobi-giris" class="panel">
+        <p>Bir oda aç, kodu ya da bağlantıyı paylaş. Arkadaşların aynı pistte, aynı anda, hayalet olarak yarışır. Sunucu yok: oda sahibi lobiyi yönetir.</p>
+        <button class="buyuk" id="oda-ac">Oda aç</button>
+        <div class="katil-satir">
+          <input id="oda-kodu" maxlength="5" placeholder="KOD" autocapitalize="characters" aria-label="Oda kodu" />
+          <button id="oda-katil" class="ikincil">Katıl</button>
+        </div>
+        <p class="hata" id="lobi-hata"></p>
+      </div>
+      <div id="lobi-oda" class="panel gizli">
+        <div class="oda-kod-satir">
+          <div>
+            <span class="etiket">Oda kodu</span>
+            <strong id="oda-kod-goster" class="oda-kod"></strong>
+          </div>
+          <button id="baglanti-kopyala" class="ikincil kucuk">Bağlantıyı kopyala</button>
+        </div>
+        <p class="durum" id="oda-durum"></p>
+        <ul id="oyuncular" class="oyuncular"></ul>
+        <div id="sahip-araclari">
+          <label class="etiket" for="pist-sec">Pist</label>
+          <select id="pist-sec"></select>
+          <div class="katil-satir">
+            <input id="ozel-pist-kodu" placeholder="ya da pist kodu yapıştır" aria-label="Özel pist kodu" />
+            <button id="ozel-pist-yukle" class="ikincil kucuk">Yükle</button>
+          </div>
+          <button class="buyuk" id="yaris-baslat">Yarışı başlat</button>
+        </div>
+        <p class="ipucu" id="misafir-notu">Oda sahibi pisti seçip yarışı başlatınca geri sayım herkes için aynı anda başlar.</p>
+      </div>
+    </section>
+
+    <!-- ATÖLYE -->
+    <section id="atolye" class="ekran gizli">
+      <header class="ust"><button class="geri" data-git="menu">← Menü</button><h2>Pist atölyesi</h2></header>
+      <div class="atolye-govde">
+        <div class="panel atolye-panel">
+          <label class="etiket">Pist adı <input id="ed-ad" maxlength="40" value="Benim pistim" /></label>
+          <div class="parca-paleti" id="parca-paleti"></div>
+          <ol id="parca-listesi" class="parca-listesi"></ol>
+          <div class="ed-dugmeler">
+            <button id="ed-sur" class="buyuk">Sür</button>
+            <button id="ed-kopyala" class="ikincil">Kodu kopyala</button>
+            <button id="ed-temizle" class="ikincil">Temizle</button>
+          </div>
+          <div class="katil-satir">
+            <input id="ed-kod" placeholder="pist kodu yapıştır" aria-label="Pist kodu" />
+            <button id="ed-yukle" class="ikincil kucuk">Yükle</button>
+          </div>
+          <p class="hata" id="ed-mesaj"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- YARIŞ GÖSTERGESİ -->
+    <section id="hud" class="gizli" aria-live="polite">
+      <div class="hud-sol">
+        <div id="hud-pist" class="hud-pist"></div>
+        <div id="hud-cp" class="hud-cp"></div>
+        <ol id="hud-siralama" class="hud-siralama"></ol>
+      </div>
+      <div class="hud-orta">
+        <div id="hud-sure" class="hud-sure">0:00.000</div>
+        <div id="hud-fark" class="hud-fark"></div>
+        <div id="hud-hedef" class="hud-hedef"></div>
+      </div>
+      <div class="hud-sag">
+        <button data-tus="respawn" title="Son kontrol noktası (Enter)" aria-label="Son kontrol noktasına dön">⚑</button>
+        <button data-tus="restart" title="Yeniden başla (R)" aria-label="Yeniden başla">↺</button>
+        <button data-tus="pause" title="Duraklat (Esc)" aria-label="Duraklat">❚❚</button>
+      </div>
+      <div id="hud-hiz" class="hud-hiz"><b>0</b><span>km/sa</span></div>
+      <div id="geri-sayim" class="geri-sayim"></div>
+      <div id="dokunmatik" class="dokunmatik">
+        <div class="dk-sol">
+          <button data-tus="left" aria-label="Sola">◀</button>
+          <button data-tus="right" aria-label="Sağa">▶</button>
+        </div>
+        <div class="dk-sag">
+          <button data-tus="drift" class="dk-drift" aria-label="Drift">DRIFT</button>
+          <button data-tus="brake" class="dk-fren" aria-label="Fren">◼</button>
+          <button data-tus="gas" class="dk-gaz" aria-label="Gaz">▲</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- DURAKLAT -->
+    <section id="duraklat" class="katman gizli">
+      <div class="panel ortala">
+        <h2>Duraklatıldı</h2>
+        <button class="buyuk" id="devam">Devam</button>
+        <button class="ikincil" id="dur-yeniden">Yeniden başla</button>
+        <button class="ikincil" id="dur-menu">Menüye dön</button>
+      </div>
+    </section>
+
+    <!-- BİTİŞ (tek kişilik) -->
+    <section id="bitis" class="katman gizli">
+      <div class="panel ortala">
+        <div id="bitis-madalya" class="madalya-buyuk"></div>
+        <h2 id="bitis-sure" class="bitis-sure"></h2>
+        <p id="bitis-not"></p>
+        <div id="bitis-hedefler" class="hedefler"></div>
+        <button class="buyuk" id="bitis-tekrar">Tekrar <small>R</small></button>
+        <button class="ikincil" id="bitis-sonraki">Sonraki bölüm</button>
+        <button class="ikincil" id="bitis-bolumler">Bölümler</button>
+      </div>
+    </section>
+
+    <!-- SONUÇ (lobi) -->
+    <section id="sonuc" class="katman gizli">
+      <div class="panel ortala">
+        <h2 id="sonuc-baslik">Sıralama</h2>
+        <ol id="sonuc-listesi" class="sonuc-listesi"></ol>
+        <div id="sonuc-sahip">
+          <button class="buyuk" id="sonuc-tekrar">Aynı pistte tekrar</button>
+          <button class="ikincil" id="sonuc-lobi">Lobiye dön</button>
+        </div>
+        <p class="ipucu" id="sonuc-misafir">Oda sahibinin sonraki yarışı başlatması bekleniyor…</p>
+      </div>
+    </section>
+
+    <div id="bildirim" class="bildirim" role="status"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
