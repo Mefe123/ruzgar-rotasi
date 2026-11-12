@@ -47,6 +47,8 @@ const PALETTE: Block[] = [
     ],
   },
   { label: 'Dar köprü', segs: [{ t: 's', l: 35, w: 9, open: true }, { t: 's', l: 15, w: 14 }] },
+  { label: 'Buzlu düz', segs: [{ t: 's', l: 40, g: 'buz' }] },
+  { label: 'Toprak viraj', segs: [{ t: 'c', a: 90, r: 30, g: 'toprak' }] },
   { label: 'Kontrol', segs: [{ t: 'cp' }] },
 ]
 

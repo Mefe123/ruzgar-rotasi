@@ -5,17 +5,24 @@ import { Vector3 } from 'three'
 /** Pist parçaları. Açılar derece, uzunluklar metre.
  *  s: düz · c: viraj (a>0 sola) · p: eğim değişimi (a>0 yukarı) · gap: boşluk (sıçrama)
  *  loop: döngü · cp: kontrol noktası
+ *  c.y: viraj boyunca tırmanış (m, sarmal için)
  *  bank: yatış (s/p'de işaretli, + sola yatar; c'de büyüklük, yönü virajdan) · w: genişlik
  *  boost: hız şeridi · open: kenar duvarı yok */
 export type Seg =
-  | { t: 's'; l: number; bank?: number; w?: number; boost?: boolean; open?: boolean }
-  | { t: 'c'; a: number; r: number; bank?: number; w?: number; boost?: boolean; open?: boolean }
-  | { t: 'p'; a: number; l: number; bank?: number; w?: number; boost?: boolean; open?: boolean }
+  | { t: 's'; l: number; bank?: number; w?: number; boost?: boolean; open?: boolean; g?: Zemin }
+  | { t: 'c'; a: number; r: number; y?: number; bank?: number; w?: number; boost?: boolean; open?: boolean; g?: Zemin }
+  | { t: 'p'; a: number; l: number; bank?: number; w?: number; boost?: boolean; open?: boolean; g?: Zemin }
   | { t: 'gap'; l: number; drop?: number }
   | { t: 'loop'; r: number; side?: number }
   | { t: 'cp' }
 
+/** yüzey: asfalt (varsayılan), buz, toprak */
+export type Zemin = 'buz' | 'toprak'
+export type Tema = 'kanyon' | 'buzul' | 'gece'
+export const GRIP: Record<string, number> = { asfalt: 1, buz: 0.42, toprak: 0.72 }
+
 export interface TrackDef {
+  tema?: Tema
   id: string
   name: string
   width?: number
@@ -46,6 +53,8 @@ export class Track {
   surface: boolean[] = []
   wall: boolean[] = []
   boost: boolean[] = []
+  grip: number[] = []
+  zemin: (Zemin | null)[] = []
   K: number[] = [] // normal yöndeki eğrilik (+: yüzey yukarı kıvrılıyor)
   cps: number[] = []
   finish = 0
@@ -75,7 +84,10 @@ export class Track {
     const tmpU = new Vector3()
     const tmpR = new Vector3()
 
+    let zemin: Zemin | null = null
     const push = (surface: boolean, wall: boolean, boost: boolean) => {
+      this.grip.push(zemin ? GRIP[zemin] : 1)
+      this.zemin.push(zemin)
       // yüzey çerçevesi = taban çerçevenin T etrafında yatırılmışı (+bank sola yatar)
       tmpU.copy(U).applyAxisAngle(T, -bank * D2R)
       tmpR.copy(T).cross(tmpU).normalize()
@@ -111,6 +123,7 @@ export class Track {
         this.cps.push(this.P.length - 1)
         continue
       }
+      zemin = null
       if (s.t === 'gap') {
         // çerçeveyi düzle: boşlukta yön yataydır
         T.y = 0
@@ -150,6 +163,7 @@ export class Track {
         continue
       }
       const wall = !s.open
+      zemin = s.g ?? null
       const boost = !!s.boost
       const w0 = width
       const w1 = s.w ?? width
@@ -177,6 +191,7 @@ export class Track {
           T.applyAxisAngle(U, da / 2)
           R.applyAxisAngle(U, da / 2)
           const k = (i + 1) / n
+          if (s.y) P.y += s.y * (smooth(k) - smooth(i / n))
           // yatış girişte kurulur, çıkışta sıfıra döner
           const kin = smooth(Math.min(1, k / 0.3))
           const kout = smooth(Math.min(1, (1 - k) / 0.3))

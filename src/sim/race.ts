@@ -1,6 +1,6 @@
 // Yarış oturumu: süre, kontrol noktaları, bitiş ve hayalet kaydı. Tarayıcıdan bağımsız.
 import { Quaternion, Vector3 } from 'three'
-import { CarSim, DT, type Input } from './car'
+import { CarSim, DT, cornerSpeed, type Input } from './car'
 import { Track } from './track'
 
 export const GHOST_EVERY = 3 // 120 Hz / 3 = 40 Hz kayıt
@@ -160,9 +160,25 @@ const tmpV = new Vector3()
 const tmpQ = new Quaternion()
 
 /** basit pilot: pistin ortasındaki ileri bir noktaya yönelir (ayar ve test için) */
+const botState = new WeakMap<Race, { stuck: number; back: number }>()
+
 export function botInput(race: Race, aggressive = 1): Input {
   const car = race.car
   const tr = race.track
+  // takıldıysa (duvara burun) bir süre geri çık
+  let st = botState.get(race)
+  if (!st) botState.set(race, (st = { stuck: 0, back: 0 }))
+  if (st.back > 0) {
+    st.back -= DT
+    const toC = tr.P[car.idx].clone().sub(car.p).dot(car.right)
+    return { throttle: 0, brake: 1, steer: toC > 0 ? -1 : 1, drift: false }
+  }
+  if (car.speed < 2 && race.started && !race.finished) st.stuck += DT
+  else st.stuck = 0
+  if (st.stuck > 0.8) {
+    st.stuck = 0
+    st.back = 1.2
+  }
   const look = Math.round(8 + Math.abs(car.fwdSpeed) * 0.35)
   const ti = Math.min(tr.count - 1, car.idx + look)
   const target = tr.P[ti].clone().sub(car.p)
@@ -184,8 +200,8 @@ export function botInput(race: Race, aggressive = 1): Input {
     const ang = Math.acos(Math.min(1, a0.dot(a1))) // yalnızca yatay kıvrım (döngü sayılmaz)
     if (ang < 1e-3) continue
     const r = 6 / ang
-    const vlim = 1.3 * r * aggressive
-    if (v > vlim && v * v - vlim * vlim > 2 * 30 * k) mustBrake = true
+    const vlim = cornerSpeed(r) * 0.9 * aggressive
+    if (v > vlim && v * v - vlim * vlim > 2 * 22 * k) mustBrake = true
   }
   return {
     throttle: mustBrake ? 0 : 1,

@@ -8,7 +8,7 @@ export interface Best {
   cps: number[]
 }
 
-const KEY = 'rr.best.'
+const KEY = 'rr2.best.' // fizik değişince eski rekorlar geçersiz
 
 export function loadBest(trackId: string): Best | null {
   try {

@@ -22,6 +22,7 @@ import {
 } from './game/store'
 import { Lobby, makeCode, type LobbyState, type PosPacket } from './game/net'
 import { Editor } from './game/editor'
+import { Effects } from './game/effects'
 import { Track, decodeTrack, type TrackDef } from './sim/track'
 import { LEVELS } from './sim/tracks'
 import { MEDALS } from './sim/medals'
@@ -43,6 +44,8 @@ const world = new World(canvas, settings)
 const controls = new Controls()
 controls.bindTouch($('hud'))
 const sfx = new Sfx()
+const fx = new Effects(settings.lowPower)
+world.scene.add(fx.group)
 window.addEventListener('pointerdown', () => sfx.unlock(), { once: false })
 window.addEventListener('keydown', () => sfx.unlock())
 
@@ -189,6 +192,8 @@ function loadRun(def: TrackDef, level: number, withGhost: boolean) {
   const race = new Race(track)
   const player = makeCar(getColor())
   world.scene.add(player.group)
+  fx.attachFlames(player.group)
+  fx.reset()
   const best = loadBest(def.id)
   let ghost: CarView | undefined
   let ghostData: Float32Array | undefined
@@ -219,6 +224,7 @@ function disposeRun() {
 function beginCountdown(ms: number) {
   if (!run) return
   run.race.restart()
+  fx.reset()
   controls.reset()
   acc = 0
   countdownEnd = performance.now() + ms
@@ -476,7 +482,8 @@ function frame(now: number) {
   drawP.copy(prevP).lerp(car.p, alpha)
   drawQ.copy(prevQ).slerp(curQ, alpha)
   run.player.setPose(drawP, drawQ)
-  run.player.animate(car.fwdSpeed, lastInput.steer, dt)
+  run.player.animate(car.fwdSpeed, car.steerAngle, dt, car.wheelComp)
+  if (!paused) fx.update(car, dt, car.onBoost && lastInput.throttle > 0)
 
   // hayalet
   if (run.ghost && run.ghostData) {
@@ -490,7 +497,7 @@ function frame(now: number) {
   if (mode === 'multi') updateRemotes(now, dt)
 
   world.follow(drawP, car.f, car.up, car.v, car.grounded, dt)
-  sfx.engine(car.speed, lastInput.throttle, race.started && !paused)
+  sfx.engine(car.fwdSpeed, lastInput.throttle, race.started && !paused, car.grounded ? Math.abs(car.slip) + (car.drifting ? 4 : 0) : 0)
 
   // HUD
   $('hud-sure').textContent = fmt(race.time)
@@ -686,7 +693,7 @@ function updateRemotes(now: number, dt: number) {
     tmpV.set(a.p[0], a.p[1], a.p[2]).lerp(rv.set(c.p[0], c.p[1], c.p[2]), f)
     tmpQ.set(a.p[3], a.p[4], a.p[5], a.p[6]).slerp(rq.set(c.p[3], c.p[4], c.p[5], c.p[6]), f)
     r.view.setPose(tmpV, tmpQ)
-    r.view.animate(c.p[8], c.p[7], dt)
+    r.view.animate(c.p[8], -c.p[7] * 0.45, dt)
   }
 }
 const rv = new THREE.Vector3()

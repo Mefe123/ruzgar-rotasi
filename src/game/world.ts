@@ -1,14 +1,32 @@
 // Üç boyutlu dünya: gökyüzü, kanyon zemini, pist şeridi, kapılar, kamera.
 import * as THREE from 'three'
-import { Track } from '../sim/track'
+import { Track, type Tema } from '../sim/track'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 
-export const PALETTE = {
+const KANYON = {
   skyTop: 0x5b4b8a,
   skyHorizon: 0xffc59e,
+  skyGround: 0xdb8c73,
   fog: 0xf4b896,
-  sun: 0xfff0d6,
+  sunCol: 0xfff0dc,
+  sunI: 2.4,
+  hemiSky: 0xffe2c9,
+  hemiGround: 0xc98f86,
+  hemiI: 1.5,
+  fillCol: 0xffc4a3,
+  fillI: 1.6,
+  exposure: 1.05,
+  stars: 0,
+  glow: 0,
   road: 0x2e2a45,
   road2: 0x34304d,
+  ice: 0xbfe6f5,
+  ice2: 0xaedcef,
+  dirt: 0x8a5a3c,
+  dirt2: 0x7d5034,
   edge: 0xfff1dc,
   curb: 0xff6b5b,
   wall: 0xf7e6cf,
@@ -21,7 +39,81 @@ export const PALETTE = {
   clay: 0xc9785a,
   rock: 0x9b5a63,
   shrub: 0x7f9a6a,
+  tall: 'mesa' as 'mesa' | 'ice' | 'tower',
+  small: 'shrub' as 'shrub' | 'pine' | 'lamp',
 }
+type Pal = typeof KANYON
+
+export const THEMES: Record<Tema, Pal> = {
+  kanyon: KANYON,
+  buzul: {
+    ...KANYON,
+    skyTop: 0x2f6fb8,
+    skyHorizon: 0xe6f3ff,
+    skyGround: 0xcfe2f2,
+    fog: 0xcfe1f2,
+    sunCol: 0xffffff,
+    sunI: 2.6,
+    hemiSky: 0xeaf4ff,
+    hemiGround: 0x9fb4c8,
+    hemiI: 1.45,
+    fillCol: 0xcfe4ff,
+    fillI: 1.3,
+    exposure: 0.88,
+    road: 0x343c4c,
+    road2: 0x3a4354,
+    edge: 0xffffff,
+    curb: 0x2f7fe0,
+    wall: 0xeef4fa,
+    wallTop: 0x4aa3ff,
+    under: 0x56657a,
+    pillar: 0xc6d4e2,
+    sand: 0xf3f8fd,
+    clay: 0xc4d6e8,
+    rock: 0x7b8ea6,
+    shrub: 0x2f5a4c,
+    tall: 'ice',
+    small: 'pine',
+  },
+  gece: {
+    ...KANYON,
+    skyTop: 0x03041a,
+    skyHorizon: 0x2b1d5e,
+    skyGround: 0x120f2a,
+    fog: 0x1a1440,
+    sunCol: 0xa9b8ff,
+    sunI: 1.1,
+    hemiSky: 0x6a74c8,
+    hemiGround: 0x2a1d48,
+    hemiI: 1.15,
+    fillCol: 0x7a5cff,
+    fillI: 0.9,
+    exposure: 1.15,
+    stars: 1,
+    glow: 1.0,
+    road: 0x23223a,
+    road2: 0x292844,
+    edge: 0x7ffcff,
+    curb: 0xff3fa4,
+    wall: 0x2e2b4e,
+    wallTop: 0x7ffcff,
+    under: 0x191732,
+    pillar: 0x37335e,
+    cp: 0xb6ff5c,
+    sand: 0x17142e,
+    clay: 0x231d44,
+    rock: 0x2f2858,
+    shrub: 0xff3fa4,
+    tall: 'tower',
+    small: 'lamp',
+  },
+}
+
+/** geçerli temanın renkleri (setTrack değiştirir) */
+export const PALETTE: Pal = { ...KANYON }
+
+// yoldaki parlak renkler gece temasında ışıldar
+const glowUniform = { value: 0 }
 
 export interface Settings {
   reducedMotion: boolean
@@ -33,6 +125,11 @@ export class World {
   scene = new THREE.Scene()
   camera: THREE.PerspectiveCamera
   sun: THREE.DirectionalLight
+  hemi: THREE.HemisphereLight
+  fill: THREE.DirectionalLight
+  private skyMat!: THREE.ShaderMaterial
+  private composer?: EffectComposer
+  private bloom?: UnrealBloomPass
   trackGroup = new THREE.Group()
   track?: Track
   private camUp = new THREE.Vector3(0, 1, 0)
@@ -57,12 +154,12 @@ export class World {
     this.scene.fog = new THREE.Fog(PALETTE.fog, 180, 1500)
     this.scene.add(this.makeSky())
 
-    const hemi = new THREE.HemisphereLight(0xffe2c9, 0xc98f86, 1.5)
-    this.scene.add(hemi)
+    this.hemi = new THREE.HemisphereLight(0xffe2c9, 0xc98f86, 1.5)
+    this.scene.add(this.hemi)
     // alttan dolgu: döngüde ve duvarda ters dönen yol simsiyah kalmasın
-    const fill = new THREE.DirectionalLight(0xffc4a3, 1.6)
-    fill.position.set(30, -100, 40)
-    this.scene.add(fill)
+    this.fill = new THREE.DirectionalLight(0xffc4a3, 1.6)
+    this.fill.position.set(30, -100, 40)
+    this.scene.add(this.fill)
     this.sun = new THREE.DirectionalLight(0xfff0dc, 2.4)
     this.sun.castShadow = true
     const sm = settings.lowPower ? 1024 : 2048
@@ -77,6 +174,14 @@ export class World {
     this.sun.shadow.bias = -0.0006
     this.scene.add(this.sun, this.sun.target)
     this.scene.add(this.trackGroup)
+    // parlama (yalnızca güçlü cihazlarda)
+    if (!settings.lowPower) {
+      this.composer = new EffectComposer(this.renderer)
+      this.composer.addPass(new RenderPass(this.scene, this.camera))
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.35, 0.5, 0.82)
+      this.composer.addPass(this.bloom)
+      this.composer.addPass(new OutputPass())
+    }
     this.resize()
     window.addEventListener('resize', () => this.resize())
   }
@@ -85,6 +190,7 @@ export class World {
     const w = this.canvas.clientWidth || window.innerWidth
     const h = this.canvas.clientHeight || window.innerHeight
     this.renderer.setSize(w, h, false)
+    this.composer?.setSize(w, h)
     this.camera.aspect = w / h
     // dikey ekranda görüş alanını genişlet
     this.camera.fov = w < h ? 82 : 68
@@ -93,27 +199,37 @@ export class World {
 
   private makeSky() {
     const geo = new THREE.SphereGeometry(2400, 24, 12)
-    const mat = new THREE.ShaderMaterial({
+    const mat = (this.skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
       uniforms: {
         top: { value: new THREE.Color(PALETTE.skyTop) },
         horizon: { value: new THREE.Color(PALETTE.skyHorizon) },
+        ground: { value: new THREE.Color(PALETTE.skyGround) },
+        sunCol: { value: new THREE.Color(1, 0.86, 0.6) },
+        stars: { value: 0 },
         sunDir: { value: new THREE.Vector3(-0.5, 0.28, -0.8).normalize() },
       },
       vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-      fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; varying vec3 vDir;
+      fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 ground; uniform vec3 sunCol; uniform float stars; uniform vec3 sunDir; varying vec3 vDir;
+        float hash(vec3 p){ p = fract(p*0.3183099+0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
         void main(){
-          float h = clamp(vDir.y, -0.2, 1.0);
+          vec3 d = normalize(vDir);
+          float h = clamp(d.y, -0.2, 1.0);
           vec3 c = mix(horizon, top, pow(max(h,0.0), 0.55));
-          float s = max(dot(normalize(vDir), sunDir), 0.0);
-          c += vec3(1.0,0.86,0.6) * (pow(s, 600.0) * 1.6 + pow(s, 12.0) * 0.25);
-          if (h < 0.0) c = mix(horizon, vec3(0.86,0.55,0.45), clamp(-h*4.0,0.0,1.0));
+          float s = max(dot(d, sunDir), 0.0);
+          c += sunCol * (pow(s, 600.0) * 1.6 + pow(s, 12.0) * 0.25);
+          if (stars > 0.0 && h > 0.02) {
+            vec3 q = floor(d * 380.0);
+            float st = step(0.9975, hash(q)) * smoothstep(0.02, 0.3, h);
+            c += vec3(st) * stars;
+          }
+          if (h < 0.0) c = mix(horizon, ground, clamp(-h*4.0,0.0,1.0));
           gl_FragColor = vec4(c, 1.0);
           #include <colorspace_fragment>
         }`,
-    })
+    }))
     const m = new THREE.Mesh(geo, mat)
     m.frustumCulled = false
     m.renderOrder = -1
@@ -124,6 +240,7 @@ export class World {
   setTrack(track: Track) {
     this.clearTrack()
     this.track = track
+    this.applyTheme(track.def.tema ?? 'kanyon')
     const g = this.trackGroup
     g.add(buildRoad(track))
     const boost = buildBoost(track)
@@ -132,6 +249,33 @@ export class World {
     g.add(buildPillars(track))
     g.add(buildScenery(track, this.settings.lowPower))
     this.camInit = false
+  }
+
+  applyTheme(tema: Tema) {
+    Object.assign(PALETTE, THEMES[tema] ?? KANYON)
+    const u = this.skyMat.uniforms
+    u.top.value.setHex(PALETTE.skyTop)
+    u.horizon.value.setHex(PALETTE.skyHorizon)
+    u.ground.value.setHex(PALETTE.skyGround)
+    u.stars.value = PALETTE.stars
+    u.sunCol.value.setHex(PALETTE.stars ? 0x8090ff : 0xffdb99)
+    const fog = this.scene.fog as THREE.Fog
+    fog.color.setHex(PALETTE.fog)
+    fog.near = tema === 'buzul' ? 260 : 180
+    fog.far = tema === 'buzul' ? 1300 : 1500
+    this.hemi.color.setHex(PALETTE.hemiSky)
+    this.hemi.groundColor.setHex(PALETTE.hemiGround)
+    this.hemi.intensity = PALETTE.hemiI
+    this.sun.color.setHex(PALETTE.sunCol)
+    this.sun.intensity = PALETTE.sunI
+    this.fill.color.setHex(PALETTE.fillCol)
+    this.fill.intensity = PALETTE.fillI
+    this.renderer.toneMappingExposure = PALETTE.exposure
+    glowUniform.value = PALETTE.glow
+    if (this.bloom) {
+      this.bloom.strength = PALETTE.glow ? 0.55 : 0.18
+      this.bloom.threshold = PALETTE.glow ? 0.72 : 0.93
+    }
   }
 
   clearTrack() {
@@ -218,7 +362,8 @@ export class World {
   }
 
   render() {
-    this.renderer.render(this.scene, this.camera)
+    if (this.composer) this.composer.render()
+    else this.renderer.render(this.scene, this.camera)
   }
 }
 
@@ -300,7 +445,10 @@ function buildRoad(tr: Track): THREE.Object3D {
     corners(a, EDGE, l0, r0, 0.005)
     corners(b, EDGE, l1, r1, 0.005)
     // yol yüzeyi: hız hissi için 8 m'de bir ton değişimi
-    const roadCol = Math.floor(mid / 8) % 2 ? PALETTE.road : PALETTE.road2
+    const alt = Math.floor(mid / 8) % 2
+    const zem = tr.zemin[a]
+    const roadCol =
+      zem === 'buz' ? (alt ? PALETTE.ice : PALETTE.ice2) : zem === 'toprak' ? (alt ? PALETTE.dirt : PALETTE.dirt2) : alt ? PALETTE.road : PALETTE.road2
     gb.quad(l0, r0, r1, l1, roadCol)
     // kenar şeritleri: 4 m'de bir mercan / krem
     const curb = Math.floor(mid / 4) % 2 ? PALETTE.curb : PALETTE.edge
@@ -340,6 +488,16 @@ function buildRoad(tr: Track): THREE.Object3D {
     void w1r
   }
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, side: THREE.DoubleSide })
+  // gece: açık renkli kenar ve şeritler kendi ışığını yayar
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uGlow = glowUniform
+    sh.fragmentShader =
+      'uniform float uGlow;\n' +
+      sh.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor.rgb * smoothstep(0.35, 0.6, max(vColor.r, max(vColor.g, vColor.b))) * uGlow;',
+      )
+  }
   const mesh = new THREE.Mesh(gb.build(), mat)
   mesh.receiveShadow = true
   return mesh
@@ -476,6 +634,14 @@ function buildPillars(tr: Track): THREE.Object3D {
     const top = tr.P[i].y - 0.9
     const h = top - ground
     if (h < 1.5) continue
+    // altından başka bir yol geçiyorsa ayak koyma
+    let blocked = false
+    for (let j = 0; j < tr.count && !blocked; j += 3) {
+      if (Math.abs(j - i) < 30 || !tr.surface[j]) continue
+      const q = tr.P[j]
+      if (q.y < top - 1.5 && q.y > ground && Math.hypot(q.x - tr.P[i].x, q.z - tr.P[i].z) < tr.W[j] / 2 + 3) blocked = true
+    }
+    if (blocked) continue
     const m = new THREE.Matrix4().compose(
       new THREE.Vector3(tr.P[i].x, ground + h / 2, tr.P[i].z),
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(tr.T[i].x, tr.T[i].z)),
@@ -586,11 +752,29 @@ function buildScenery(tr: Track, low: boolean): THREE.Object3D {
 
   // mesalar (düz tepeli kayalar), taşlar, çalılar
   const rnd = mulberry(tr.count * 7 + 13)
-  const mesaGeo = new THREE.CylinderGeometry(1, 1.15, 1, 7)
+  const mesaGeo =
+    PALETTE.tall === 'ice'
+      ? new THREE.ConeGeometry(1, 1, 6)
+      : PALETTE.tall === 'tower'
+        ? new THREE.BoxGeometry(1, 1, 1)
+        : new THREE.CylinderGeometry(1, 1.15, 1, 7)
   const rockGeo = new THREE.DodecahedronGeometry(1, 0)
-  const shrubGeo = new THREE.IcosahedronGeometry(1, 0)
-  const place = (geo: THREE.BufferGeometry, color: number, n: number, minD: number, maxD: number, scale: (r: () => number) => THREE.Vector3, sink = 0) => {
-    const mat = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.95 })
+  const shrubGeo =
+    PALETTE.small === 'pine'
+      ? new THREE.ConeGeometry(1, 2.6, 6)
+      : PALETTE.small === 'lamp'
+        ? new THREE.OctahedronGeometry(0.6, 0)
+        : new THREE.IcosahedronGeometry(1, 0)
+  const place = (
+    geo: THREE.BufferGeometry,
+    color: number,
+    n: number,
+    minD: number,
+    maxD: number,
+    scale: (r: () => number) => THREE.Vector3,
+    sink = 0,
+    mat: THREE.Material = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.95 }),
+  ) => {
     const inst = new THREE.InstancedMesh(geo, mat, n)
     const m = new THREE.Matrix4(),
       q = new THREE.Quaternion(),
@@ -612,19 +796,51 @@ function buildScenery(tr: Track, low: boolean): THREE.Object3D {
     inst.receiveShadow = true
     group.add(inst)
   }
-  place(mesaGeo, PALETTE.clay, low ? 18 : 30, 160, 900, (r) => {
-    const w = 25 + r() * 45
-    return new THREE.Vector3(w, 40 + r() * 70, w * (0.7 + r() * 0.5))
-  }, 0.1)
+  if (PALETTE.tall === 'tower') {
+    const towerMat = new THREE.MeshStandardMaterial({ color: 0x1b1838, emissive: 0xffffff, emissiveMap: windowTexture(), emissiveIntensity: 1.1, roughness: 0.6 })
+    place(mesaGeo, PALETTE.clay, low ? 40 : 70, 120, 900, (r) => {
+      const w = 18 + r() * 30
+      return new THREE.Vector3(w, 50 + r() * 160, w * (0.7 + r() * 0.5))
+    }, 0, towerMat)
+  } else
+    place(mesaGeo, PALETTE.clay, low ? 18 : 30, 160, 900, (r) => {
+      const w = 25 + r() * 45
+      return PALETTE.tall === 'ice' ? new THREE.Vector3(w, 70 + r() * 110, w) : new THREE.Vector3(w, 40 + r() * 70, w * (0.7 + r() * 0.5))
+    }, 0.1)
   place(rockGeo, PALETTE.rock, low ? 60 : 120, 22, 500, (r) => {
     const s = 1.5 + r() * 5
     return new THREE.Vector3(s, s * (0.6 + r() * 0.5), s * (0.8 + r() * 0.4))
   }, 0.3)
-  place(shrubGeo, PALETTE.shrub, low ? 120 : 260, 16, 420, (r) => {
-    const s = 0.8 + r() * 1.6
-    return new THREE.Vector3(s, s * 0.8, s)
-  }, 0.25)
+  if (PALETTE.small === 'lamp')
+    place(shrubGeo, PALETTE.shrub, low ? 60 : 140, 14, 300, (r) => {
+      const s = 0.6 + r() * 0.8
+      return new THREE.Vector3(s, s * 1.6, s)
+    }, -1.5, new THREE.MeshBasicMaterial({ color: new THREE.Color(PALETTE.shrub).multiplyScalar(1.6) }))
+  else
+    place(shrubGeo, PALETTE.shrub, low ? 120 : 260, 16, 420, (r) => {
+      const s = PALETTE.small === 'pine' ? 1.4 + r() * 2.2 : 0.8 + r() * 1.6
+      return PALETTE.small === 'pine' ? new THREE.Vector3(s, s * 1.2, s) : new THREE.Vector3(s, s * 0.8, s)
+    }, PALETTE.small === 'pine' ? 0 : 0.25)
   return group
+}
+
+function windowTexture() {
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 128
+  const g = c.getContext('2d')!
+  g.fillStyle = '#000'
+  g.fillRect(0, 0, 64, 128)
+  for (let y = 4; y < 128; y += 8)
+    for (let x = 4; x < 64; x += 8) {
+      const r = Math.random()
+      if (r < 0.45) continue
+      g.fillStyle = r < 0.8 ? '#ffd27a' : r < 0.93 ? '#7ffcff' : '#ff6ac1'
+      g.fillRect(x, y, 4, 4)
+    }
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
 }
 
 function mulberry(a: number) {

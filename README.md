@@ -1,8 +1,16 @@
 # Rüzgâr Rotası
 
-Tarayıcıda oynanan, low-poly bir zamana karşı yarış oyunu. Kanyonda geçen 10 el yapımı bölüm, madalya hedefleri, kendi en iyi turunun hayaleti, arkadaşlarla P2P lobi ve basit bir pist atölyesi içerir. Ücretli araç ya da sunucu yok.
+Tarayıcıda oynanan, low-poly bir zamana karşı yarış oyunu. Üç temada (kanyon, buzul, gece) 15 el yapımı bölüm, madalya hedefleri, kendi en iyi turunun hayaleti, arkadaşlarla P2P lobi ve basit bir pist atölyesi içerir. Ücretli araç ya da sunucu yok.
 
 Teknoloji: Vite + TypeScript + Three.js, P2P için Trystero (Nostr sinyali), araç fiziği kendi modelimiz (`src/sim/`).
+
+## Fizik
+
+Araç dört tekerlekli bir katı gövde: her tekerlek pist yüzeyine yerel normal boyunca ışın atar; yay, amortisör, denge çubuğu ve kayma açısına bağlı lastik kuvveti (sürtünme çemberiyle) hesaplanır. Hızla artan yere basma kuvveti yüksek hızda tutuşu artırır. Döngü, duvar sürüşü, sıçrama ve sert inişler ayrı kural olmadan gövde dinamiğinden çıkar. Fizik 120 Hz dış adım, 3 alt adımla (360 Hz) çalışır ve belirlenimcidir: aynı girişle aynı süre çıkar (hayalet ve lobi buna dayanır).
+
+- **Yüzeyler:** asfalt, buz (tutuş %42) ve toprak (%72).
+- **Drift:** Boşluk arka tekerleklerin tutuşunu düşürür; karşı direksiyonla kontrol edilir.
+- **Havada:** direksiyon sapma, gaz/fren burun yukarı/aşağı verir.
 
 ## Çalıştırma
 
@@ -10,7 +18,7 @@ Teknoloji: Vite + TypeScript + Three.js, P2P için Trystero (Nostr sinyali), ara
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # tip denetimi + dist/ klasörüne statik çıktı
-npm test           # otomatik pilot 10 bölümü sürer; bitirilemeyen bölüm varsa hata verir
+npm test           # pistlerde kendi üstünden geçme denetimi + otomatik pilot 15 bölümü sürer; sorun varsa hata verir
 ```
 
 Madalya sürelerini yeniden ölçmek için (pist değiştirdiysen): `npx tsx scripts/kalibre.ts --yaz` → `src/sim/medals.ts` güncellenir.
@@ -28,7 +36,7 @@ Madalya sürelerini yeniden ölçmek için (pist değiştirdiysen): `npx tsx scr
 
 ## Oyun
 
-- **Bölümler:** zorluk sırayla artar (viraj → hız şeridi → tepeler → sıçrama → duvar sürüşü → döngü → kenarsız dar geçit → keskin virajlar → hepsi). Bir bölümde bronz alınca sonraki açılır.
+- **Bölümler:** zorluk sırayla artar (viraj → hız şeridi → tepeler → sıçrama → duvar sürüşü → döngü → kenarsız dar geçit → keskin virajlar → buz, toprak, sarmal ve uzun karma pistler). Bir bölümde bronz alınca sonraki açılır.
 - **Süre:** milisaniye hassas; fizik saniyede 120 sabit adımla çalışır, bitiş çizgisi geçişi adım içinde enterpole edilir. Aynı girişle aynı süre çıkar.
 - **Rekor ve hayalet:** her bölümün en iyi süresi, kontrol noktası ara süreleri ve hayalet kaydı `localStorage`'da tutulur. Kontrol noktasında rekora göre fark gösterilir.
 - **Lobi:** "Oda aç" 5 karakterlik kod üretir; bağlantı (`?oda=KOD`) paylaşılabilir. Oda sahibi pisti seçer (bölümlerden biri ya da atölyeden pist kodu) ve yarışı başlatır; geri sayım herkes için aynı anda başlar. Araçlar birbirinin içinden geçer (çarpışma yok), sol üstte canlı sıralama, sonunda sıralama ekranı çıkar. Lobide R başa döndürür ama ortak saat durmaz.
@@ -66,4 +74,4 @@ Hata ayıklama: sayfa adresine `?pilot` eklenirse yarışlarda otomatik pilot s�
 
 ## Özgünlük
 
-Ad, araç tasarımı, renk paleti, kanyon dünyası ve bütün pistler bu proje için yapıldı. Tür olarak bilinen zamana karşı yarış oyunlarına benzer; başka bir oyunun adı, logosu, pisti ya da görünüşü kullanılmadı. Yazı tipi: Unbounded (SIL Open Font License, `@fontsource/unbounded`).
+Ad, araç tasarımı, renk paleti, temalar ve bütün pistler bu proje için yapıldı. Tür olarak bilinen zamana karşı yarış oyunlarına benzer; başka bir oyunun adı, logosu, pisti ya da görünüşü kullanılmadı. Yazı tipi: Unbounded (SIL Open Font License, `@fontsource/unbounded`).

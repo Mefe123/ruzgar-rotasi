@@ -1,5 +1,6 @@
 // Özgün low-poly araç: kama burunlu, iri tekerlekli "kum böceği".
 import * as THREE from 'three'
+import { CAR, COM_HEIGHT } from '../sim/car'
 
 export interface CarView {
   group: THREE.Group
@@ -8,7 +9,8 @@ export interface CarView {
   label?: THREE.Sprite
   materials: THREE.Material[]
   setPose(pos: THREE.Vector3, q: THREE.Quaternion): void
-  animate(speed: number, steer: number, dt: number): void
+  /** steerRad: ön tekerlek açısı (+ sola); comps: süspansiyon sıkışmaları (varsa) */
+  animate(speed: number, steerRad: number, dt: number, comps?: number[]): void
   dispose(): void
 }
 
@@ -78,9 +80,13 @@ export function makeCar(color: string | number, opts: { ghost?: boolean; opacity
   const tail = mk(0xff4a5a, { emissive: 0xff2a3d, emissiveIntensity: 1.2 })
   const materials = [body, dark, glass, cream, lamp, tail]
 
+  // grup kökü ağırlık merkezidir; çizim yere göre yapılır, içeride aşağı kaydırılır
   const group = new THREE.Group()
+  const inner = new THREE.Group()
+  inner.position.y = -COM_HEIGHT
+  group.add(inner)
   const root = new THREE.Group() // gövde salınımı için
-  group.add(root)
+  inner.add(root)
 
   const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = root) => {
     const m = new THREE.Mesh(geo, mat)
@@ -103,6 +109,7 @@ export function makeCar(color: string | number, opts: { ghost?: boolean; opacity
 
   const wheels: THREE.Object3D[] = []
   const frontPivots: THREE.Object3D[] = []
+  const pivots: THREE.Object3D[] = []
   for (const [x, z] of [
     [1.08, -1.4],
     [-1.08, -1.4],
@@ -111,7 +118,7 @@ export function makeCar(color: string | number, opts: { ghost?: boolean; opacity
   ] as const) {
     const pivot = new THREE.Group()
     pivot.position.set(x, 0.46, z)
-    group.add(pivot)
+    inner.add(pivot)
     const w = new THREE.Group()
     pivot.add(w)
     const tire = new THREE.Mesh(wheelGeo, dark)
@@ -120,13 +127,14 @@ export function makeCar(color: string | number, opts: { ghost?: boolean; opacity
     const hub = new THREE.Mesh(hubGeo, cream)
     w.add(hub)
     wheels.push(w)
+    pivots.push(pivot)
     if (z < 0) frontPivots.push(pivot)
   }
 
   let label: THREE.Sprite | undefined
   if (opts.name) {
     label = makeLabel(opts.name, typeof color === 'string' ? color : '#' + new THREE.Color(color).getHexString())
-    label.position.set(0, 3.2, 0)
+    label.position.set(0, 2.4, 0)
     group.add(label)
   }
 
@@ -141,11 +149,17 @@ export function makeCar(color: string | number, opts: { ghost?: boolean; opacity
       group.position.copy(pos)
       group.quaternion.copy(q)
     },
-    animate(speed, steer, dt) {
+    animate(speed, steerRad, dt, comps) {
       for (const w of wheels) w.rotation.x -= (speed / 0.46) * dt
-      for (const p of frontPivots) p.rotation.y = -steer * 0.45
-      roll += (steer * Math.min(1, Math.abs(speed) / 30) * 0.06 - roll) * Math.min(1, dt * 8)
-      root.rotation.z = roll
+      for (const p of frontPivots) p.rotation.y = steerRad
+      if (comps) {
+        pivots.forEach((pv, k) => (pv.position.y = COM_HEIGHT + CAR.wheels[k].y - CAR.restLen + comps[k]))
+        root.rotation.z = 0
+      } else {
+        // fizik verisi yoksa (hayalet, uzak oyuncu) hafif sahte yalpa
+        roll += (-steerRad * Math.min(1, Math.abs(speed) / 30) * 0.12 - roll) * Math.min(1, dt * 8)
+        root.rotation.z = roll
+      }
     },
     dispose() {
       materials.forEach((m) => m.dispose())
